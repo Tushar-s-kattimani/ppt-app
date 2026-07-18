@@ -32,20 +32,32 @@ export async function POST(request: Request) {
       fontSize: 24,
       orientation: 'portrait',
       margins: { top: 1440, right: 1440, bottom: 1440, left: 1440 }, // 1 inch
-    });
+    }) as any;
 
     const safeTopic = (topic || 'Report').replace(/[^a-zA-Z0-9 -]/g, '').trim().substring(0, 30) || 'Report';
     const filename = `${safeTopic}.docx`;
 
     // Strictly convert Node Buffer to a raw ArrayBuffer to prevent Next.js from accidentally serializing it as a UTF-8 string
-    const arrayBuffer = fileBuffer.buffer.slice(fileBuffer.byteOffset, fileBuffer.byteOffset + fileBuffer.byteLength);
+    let arrayBuffer: ArrayBuffer;
+    let contentLength: string;
+    
+    if (fileBuffer instanceof Blob) {
+      arrayBuffer = await fileBuffer.arrayBuffer();
+      contentLength = fileBuffer.size.toString();
+    } else if (fileBuffer.buffer) {
+      arrayBuffer = fileBuffer.buffer.slice(fileBuffer.byteOffset, fileBuffer.byteOffset + fileBuffer.byteLength);
+      contentLength = fileBuffer.length.toString();
+    } else {
+      arrayBuffer = fileBuffer;
+      contentLength = fileBuffer.byteLength.toString();
+    }
 
     // Return the generated buffer as a downloadable DOCX file
     return new NextResponse(arrayBuffer, {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         'Content-Disposition': `attachment; filename="${filename}"`,
-        'Content-Length': fileBuffer.length.toString(),
+        'Content-Length': contentLength,
       },
     });
   } catch (error) {
