@@ -1,5 +1,5 @@
 @import "tailwindcss";
-
+@plugin "@tailwindcss/typography";
 @theme {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
@@ -14,4 +14,36 @@ body {
   color: var(--foreground);
   background: var(--background);
   font-family: var(--font-sans), sans-serif;
+}
+
+/* PDF Export Specific Styles */
+.pdf-export-mode {
+  background-color: white !important;
+  color: black !important;
+  font-family: 'Bookman Old Style', serif !important;
+  text-align: justify !important;
+}
+
+.pdf-export-mode * {
+  color: black !important;
+  font-family: 'Bookman Old Style', serif !important;
+}
+
+.pdf-export-mode .prose-invert {
+  --tw-prose-body: black;
+  --tw-prose-headings: black;
+  --tw-prose-lead: black;
+  --tw-prose-links: black;
+  --tw-prose-bold: black;
+  --tw-prose-counters: black;
+  --tw-prose-bullets: black;
+  --tw-prose-hr: black;
+  --tw-prose-quotes: black;
+  --tw-prose-quote-borders: black;
+  --tw-prose-captions: black;
+  --tw-prose-code: black;
+  --tw-prose-pre-code: black;
+  --tw-prose-pre-bg: transparent;
+  --tw-prose-th-borders: black;
+  --tw-prose-td-borders: black;
 }
