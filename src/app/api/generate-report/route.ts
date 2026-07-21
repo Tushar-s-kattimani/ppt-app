@@ -17,12 +17,16 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { topic } = body;
+    const { topic, reportPageLimit } = body;
     aiEngine = body.aiEngine || "gemini";
 
     if (!topic) {
       return NextResponse.json({ error: "Topic is required" }, { status: 400 });
     }
+
+    const pageLimitInstruction = reportPageLimit 
+      ? `LENGTH REQUIREMENT: You MUST generate enough highly detailed, exhaustive content so that the final report spans approximately ${reportPageLimit} pages. Provide extremely deep analysis, numerous examples, and comprehensive elaboration in every section to reach this exact length target.`
+      : `LENGTH REQUIREMENT: Write a comprehensive and detailed report. Expand on the points to provide a thorough analysis.`;
 
     const prompt = `
       You are an expert business analyst and professional report writer.
@@ -30,6 +34,8 @@ export async function POST(request: Request) {
       
       USER INSTRUCTIONS / TOPIC:
       "${topic}"
+      
+      ${pageLimitInstruction}
       
       REQUIREMENTS:
       You MUST strictly follow this exact structure for the report. Use Markdown formatting for headers, bullet points, and bold text. Do not add or remove sections. If a section is not applicable, write "N/A" or "Not Applicable" under that section header, but keep the header.
@@ -168,7 +174,7 @@ export async function POST(request: Request) {
       ---
       
       # 16. References
-      Use a consistent citation style.
+      Use a consistent citation style. MUST format this section as a bulleted list using the point symbol. Use this exact format for each item: "- **[Main Subject/Title]**: [Citation details...]". Do not write this as a paragraph.
       
       ---
       

@@ -119,8 +119,8 @@ export async function generatePptx(topic: string, slides: SlideData[], theme: Th
   const safeTopic = topic.length > 100 ? topic.substring(0, 100) + "..." : topic;
 
   // Set presentation properties
-  pres.author = "SlideCraft AI";
-  pres.company = "SlideCraft AI";
+  pres.author = "TSK MBA P&R";
+  pres.company = "TSK MBA P&R";
   pres.title = `Presentation on ${safeTopic}`;
   pres.layout = "LAYOUT_16x9"; // 10 inches wide, 5.625 inches high
 

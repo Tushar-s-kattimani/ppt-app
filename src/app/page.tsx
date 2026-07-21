@@ -9,7 +9,6 @@ import Link from "next/link";
 import { generatePptx, SlideData, ThemeType } from "@/lib/pptx-generator";
 import { Navbar } from "@/components/Navbar";
 import { ThemeSelector } from "@/components/ThemeSelector";
-import { useReactToPrint } from "react-to-print";
 
 export default function Home() {
   const [topic, setTopic] = useState("");
@@ -31,6 +30,7 @@ export default function Home() {
     });
   }, []);
   const [slideCount, setSlideCount] = useState(5);
+  const [reportPageLimit, setReportPageLimit] = useState<number | null>(null);
   const [theme, setTheme] = useState<ThemeType>("corporate-blue");
   const [aiEngine, setAiEngine] = useState<"gemini" | "chatgpt" | "groq">("gemini");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -137,6 +137,7 @@ export default function Home() {
     container.querySelectorAll('p').forEach(el => {
       const e = el as HTMLElement;
       e.style.fontSize = '12px';
+      e.style.marginTop = '0';
       e.style.marginBottom = '10px';
       e.style.pageBreakInside = 'avoid';
     });
@@ -145,12 +146,14 @@ export default function Home() {
     container.querySelectorAll('ul, ol').forEach(el => {
       const e = el as HTMLElement;
       e.style.paddingLeft = '24px';
+      e.style.marginTop = '0';
       e.style.marginBottom = '12px';
     });
     
     container.querySelectorAll('li').forEach(el => {
       const e = el as HTMLElement;
       e.style.fontSize = '12px';
+      e.style.marginTop = '0';
       e.style.marginBottom = '6px';
       e.style.pageBreakInside = 'avoid';
     });
@@ -219,6 +222,8 @@ export default function Home() {
     // Wait briefly for the browser to paint the new spacers
     await new Promise(r => setTimeout(r, 100));
 
+    const safeTopic = (currentTopic || 'Report').replace(/[^a-zA-Z0-9 -]/g, '').trim().substring(0, 30) || 'Report';
+
     // Temporarily remove all external/Tailwind stylesheets so html2canvas doesn't crash
     const existingStyles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'));
     const styleBackups = existingStyles.map(el => {
@@ -228,8 +233,6 @@ export default function Home() {
       parent?.removeChild(el);
       return { el, parent, sibling };
     }).filter(Boolean) as { el: Element, parent: ParentNode | null, sibling: ChildNode | null }[];
-
-    const safeTopic = (currentTopic || 'Report').replace(/[^a-zA-Z0-9 -]/g, '').trim().substring(0, 30) || 'Report';
 
     try {
       // Take a single, flawless snapshot of the perfectly paginated wrapper
@@ -428,7 +431,7 @@ export default function Home() {
       const response = await fetch("/api/generate-report", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic, aiEngine }),
+        body: JSON.stringify({ topic, aiEngine, reportPageLimit }),
       });
 
       const data = await response.json();
@@ -501,7 +504,7 @@ export default function Home() {
                   transition={{ duration: 0.5, delay: 0.2 }}
                   className="max-w-2xl mx-auto text-lg sm:text-xl text-slate-400 leading-relaxed"
                 >
-                  Describe your topic in detail, specify how many slides you need, and let SlideCraft AI deeply research and structure your presentation.
+                  Describe your topic in detail, specify how many slides you need, and let <strong className="text-white">TSK MBA P&R</strong> deeply research and structure your presentation.
                 </motion.p>
 
                 <motion.div
@@ -543,6 +546,27 @@ export default function Home() {
                               <option value={10}>10 Slides</option>
                               <option value={15}>15 Slides</option>
                               <option value={20}>20 Slides</option>
+                            </select>
+                          </div>
+                        )}
+                        {appMode === "report" && (
+                          <div className="flex items-center gap-2 bg-slate-900 border border-white/10 rounded-lg px-3 py-1.5 focus-within:ring-2 focus-within:ring-indigo-500">
+                            <FileText className="h-4 w-4 text-slate-400" />
+                            <select 
+                              value={reportPageLimit || ""}
+                              onChange={(e) => setReportPageLimit(e.target.value ? Number(e.target.value) : null)}
+                              disabled={isGenerating}
+                              className="bg-transparent text-white text-sm focus:outline-none cursor-pointer"
+                            >
+                              <option value="">Default (No Limit)</option>
+                              <option value={5}>5 Pages</option>
+                              <option value={10}>10 Pages</option>
+                              <option value={15}>15 Pages</option>
+                              <option value={20}>20 Pages</option>
+                              <option value={25}>25 Pages</option>
+                              <option value={30}>30 Pages</option>
+                              <option value={35}>35 Pages</option>
+                              <option value={40}>40 Pages</option>
                             </select>
                           </div>
                         )}
@@ -673,7 +697,7 @@ export default function Home() {
 
             <div id="presentation-preview" ref={componentRef} className="grid gap-8 mb-16 p-4 bg-slate-950 print:bg-white print:text-black">
               {generatedReport && (
-                <div className="bg-slate-900/80 border border-white/10 rounded-2xl p-8 sm:p-12 shadow-2xl backdrop-blur-sm print:bg-white print:border-none print:shadow-none print:p-0">
+                <div className="bg-slate-900/80 border border-white/10 rounded-2xl p-8 sm:p-12 shadow-2xl backdrop-blur-sm overflow-x-auto print:bg-white print:border-none print:shadow-none print:p-0">
                   <div className="prose prose-invert prose-indigo max-w-none print:prose-p:text-black print:prose-headings:text-black">
                     <ReactMarkdown>{generatedReport}</ReactMarkdown>
                   </div>

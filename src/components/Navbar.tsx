@@ -10,7 +10,7 @@ export function Navbar() {
           <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
             <Presentation className="h-5 w-5 text-white" />
           </div>
-          <span className="font-bold text-xl tracking-tight text-white">SlideCraft AI</span>
+          <span className="font-bold text-xl tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">TSK MBA P&R</span>
         </Link>
         <div className="flex items-center gap-6">
           <div className="hidden md:flex items-center space-x-1">
