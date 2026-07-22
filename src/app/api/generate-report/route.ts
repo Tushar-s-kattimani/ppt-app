@@ -2,14 +2,18 @@ import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import OpenAI from "openai";
 
-// Initialize Gemini API
-const apiKey = process.env.GEMINI_API_KEY;
-const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
+// Gemini API is initialized dynamically per request for key rotation
 
 export async function POST(request: Request) {
   let aiEngine = "gemini";
   try {
-    if (!genAI || apiKey === "your_gemini_api_key_here") {
+    // Read and rotate Gemini API keys
+    const apiKeysString = process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || "";
+    const apiKeys = apiKeysString.split(',').map(k => k.trim()).filter(Boolean);
+    const selectedApiKey = apiKeys.length > 0 ? apiKeys[Math.floor(Math.random() * apiKeys.length)] : null;
+    const genAI = selectedApiKey && selectedApiKey !== "your_gemini_api_key_here" ? new GoogleGenerativeAI(selectedApiKey) : null;
+
+    if (!genAI) {
       return NextResponse.json(
         { error: "Please add a valid Gemini API Key to the .env.local file to use this feature." },
         { status: 500 }
@@ -24,6 +28,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Topic is required" }, { status: 400 });
     }
 
+    let companyDomain = "";
+    if (genAI && aiEngine === "gemini") {
+      try {
+        const preFlightModel = genAI.getGenerativeModel({ 
+          model: "gemini-2.5-flash",
+          tools: [{ googleSearch: {} } as any] 
+        });
+        const preFlightPrompt = `Identify the official company domain/URL for the following topic: "${topic}". Return ONLY the raw domain name (e.g., example.com) and absolutely nothing else. If you cannot find one or if the topic is not a company, reply with 'NOT_FOUND'.`;
+        const preFlightResult = await preFlightModel.generateContent(preFlightPrompt);
+        const domainResponse = await preFlightResult.response;
+        const text = domainResponse.text().trim();
+        // Basic validation that it looks somewhat like a domain
+        if (text && text !== "NOT_FOUND" && !text.includes(" ")) {
+          companyDomain = text;
+        }
+      } catch (err) {
+        console.warn("Pre-flight domain search failed:", err);
+      }
+    }
+
     const pageLimitInstruction = reportPageLimit 
       ? `LENGTH REQUIREMENT: You MUST generate enough highly detailed, exhaustive content so that the final report spans approximately ${reportPageLimit} pages. Provide extremely deep analysis, numerous examples, and comprehensive elaboration in every section to reach this exact length target.`
       : `LENGTH REQUIREMENT: Write a comprehensive and detailed report. Expand on the points to provide a thorough analysis.`;
@@ -34,6 +58,10 @@ export async function POST(request: Request) {
       
       USER INSTRUCTIONS / TOPIC:
       "${topic}"
+      
+      CRITICAL INSTRUCTION FOR RESEARCH:
+      You MUST use your built-in Google Search tool to comprehensively research the topic ("${topic}") BEFORE generating the report. 
+      ${companyDomain ? `The official website for this topic/company is ${companyDomain}. You MUST specifically use your Google Search tool with the \`site:${companyDomain}\` operator to deeply search their official web pages for products, history, financial data, and mission before writing the report. You should also search broadly for recent news.` : `Specifically, fetch the most up-to-date and minute details regarding company history, recent news, financial data, and specific facts. Do NOT rely solely on your internal knowledge. If the topic is a specific brand or company (e.g., a local business), you must prioritize live web data to ensure 100% accuracy.`}
       
       ${pageLimitInstruction}
       
@@ -139,7 +167,7 @@ export async function POST(request: Request) {
       * Business Model Canvas
       * Financial Ratio Analysis
       * Risk Analysis
-      * Competitor Analysis
+      * Competitor Analysis (CRITICAL: Provide extreme detail here. Use bullet points for each major competitor. Explicitly detail their estimated market share, key strengths/weaknesses, pricing strategy, and market positioning.)
       * Customer Analysis
       
       ---

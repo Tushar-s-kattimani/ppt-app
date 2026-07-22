@@ -2,14 +2,18 @@ import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import OpenAI from "openai";
 
-// Initialize Gemini API
-const apiKey = process.env.GEMINI_API_KEY;
-const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
+// Gemini API is initialized dynamically per request for key rotation
 
 export async function POST(request: Request) {
   let aiEngine = "gemini";
   try {
-    if (!genAI || apiKey === "your_gemini_api_key_here") {
+    // Read and rotate Gemini API keys
+    const apiKeysString = process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || "";
+    const apiKeys = apiKeysString.split(',').map(k => k.trim()).filter(Boolean);
+    const selectedApiKey = apiKeys.length > 0 ? apiKeys[Math.floor(Math.random() * apiKeys.length)] : null;
+    const genAI = selectedApiKey && selectedApiKey !== "your_gemini_api_key_here" ? new GoogleGenerativeAI(selectedApiKey) : null;
+
+    if (!genAI) {
       return NextResponse.json(
         { error: "Please add a valid Gemini API Key to the .env.local file to use this feature." },
         { status: 500 }
@@ -24,10 +28,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Topic is required" }, { status: 400 });
     }
 
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-2.5-flash",
-      tools: [{ googleSearch: {} } as any] 
-    });
+
 
     const prompt = `
       You are an expert researcher and professional presentation creator. 

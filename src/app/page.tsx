@@ -46,248 +46,8 @@ export default function Home() {
   const handleDownloadPDF = async () => {
     if (!generatedReport) return;
     
-    // Import native libraries directly instead of the buggy html2pdf wrapper
-    const html2canvas = (await import('html2canvas')).default;
-    const { jsPDF } = await import('jspdf');
-    
-    // Show loading overlay first so it covers the screen (using inline styles so it survives stylesheet removal)
-    const overlay = document.createElement('div');
-    overlay.style.position = 'fixed';
-    overlay.style.top = '0';
-    overlay.style.left = '0';
-    overlay.style.width = '100vw';
-    overlay.style.height = '100vh';
-    overlay.style.backgroundColor = '#020617';
-    overlay.style.color = 'white';
-    overlay.style.zIndex = '999999';
-    overlay.style.display = 'flex';
-    overlay.style.alignItems = 'center';
-    overlay.style.justifyContent = 'center';
-    overlay.style.fontFamily = 'sans-serif';
-    overlay.style.fontSize = '20px';
-    overlay.innerText = 'Analyzing document structure...';
-    document.body.appendChild(overlay);
-
-    await new Promise(r => setTimeout(r, 800)); // Allow browser substantial time to analyze and paint
-
-    overlay.innerText = 'Generating PDF...';
-    await new Promise(r => setTimeout(r, 200));
-
-    // BULLETPROOF SCROLL FIX: html2canvas notoriously clips absolute positioned elements if the window is scrolled down.
-    // Since the overlay completely blocks the screen, we can safely scroll to top, snapshot, and scroll back!
-    const originalScrollY = window.scrollY;
-    const originalScrollX = window.scrollX;
-    window.scrollTo(0, 0);
-
-    // Create a native div container (not an iframe)
-    // Setup jsPDF first to get exact A4 dimensions
-    const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
-    const margin = 40;
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = pdf.internal.pageSize.getHeight();
-    const innerWidth = pdfWidth - (margin * 2);
-    const innerHeight = pdfHeight - (margin * 2);
-
-    const container = document.createElement('div');
-    container.style.position = 'absolute';
-    container.style.top = '0';
-    container.style.left = '0';
-    // Match exact A4 inner width so 1px = 1pt
-    container.style.width = `${innerWidth}px`; 
-    container.style.backgroundColor = 'white';
-    container.style.zIndex = '999998'; 
-    container.id = 'pdf-export-container';
-    
-    // Extract just the report markdown HTML (it's inside .prose)
-    const markdownContainer = componentRef.current?.querySelector('.prose');
-    const htmlContent = markdownContainer ? markdownContainer.innerHTML : componentRef.current?.innerHTML;
-    
-    // Inject raw HTML inside a relative wrapper for flawless offset calculations
-    container.innerHTML = `<div style="position: relative;">${htmlContent}</div>`;
-    document.body.appendChild(container);
-
-    // FORCE INLINE STYLES: jsPDF/html2canvas can completely ignore <style> blocks injected into divs.
-    // By programmatically injecting the styles directly onto the DOM elements, we mathematically guarantee they render.
-    container.style.fontFamily = "'Bookman Old Style', 'Bookman', serif";
-    container.style.fontSize = '12px';
-    container.style.lineHeight = '1.6';
-    container.style.textAlign = 'left';
-    container.style.color = 'black';
-    
-    // Apply to all elements
-    container.querySelectorAll('*').forEach(el => {
-      const e = el as HTMLElement;
-      e.style.fontFamily = "'Bookman Old Style', 'Bookman', serif";
-      e.style.color = 'black';
-    });
-
-    // Enforce strict sizes for Headings (16px) and Paragraphs (12px)
-    container.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(el => {
-      const e = el as HTMLElement;
-      e.style.fontSize = '16px';
-      e.style.fontWeight = 'bold';
-      e.style.marginTop = '16px';
-      e.style.marginBottom = '10px';
-      e.style.pageBreakInside = 'avoid';
-      if (e.tagName.toLowerCase() === 'h1') {
-        e.style.textAlign = 'center';
-      }
-    });
-
-    container.querySelectorAll('p').forEach(el => {
-      const e = el as HTMLElement;
-      e.style.fontSize = '12px';
-      e.style.marginTop = '0';
-      e.style.marginBottom = '10px';
-      e.style.pageBreakInside = 'avoid';
-    });
-
-    // Formatting for lists and tables
-    container.querySelectorAll('ul, ol').forEach(el => {
-      const e = el as HTMLElement;
-      e.style.paddingLeft = '24px';
-      e.style.marginTop = '0';
-      e.style.marginBottom = '12px';
-    });
-    
-    container.querySelectorAll('li').forEach(el => {
-      const e = el as HTMLElement;
-      e.style.fontSize = '12px';
-      e.style.marginTop = '0';
-      e.style.marginBottom = '6px';
-      e.style.pageBreakInside = 'avoid';
-    });
-
-    container.querySelectorAll('table').forEach(el => {
-      const e = el as HTMLElement;
-      e.style.borderCollapse = 'collapse';
-      e.style.width = '100%';
-      e.style.marginBottom = '20px';
-      e.style.border = '1px solid black';
-      e.style.pageBreakInside = 'avoid';
-    });
-
-    container.querySelectorAll('th, td').forEach(el => {
-      const e = el as HTMLElement;
-      e.style.border = '1px solid black';
-      e.style.padding = '8px';
-      e.style.textAlign = 'left';
-      e.style.fontSize = '12px';
-    });
-
-    container.querySelectorAll('th').forEach(el => {
-      (el as HTMLElement).style.backgroundColor = '#f0f0f0';
-    });
-
-    await new Promise(r => setTimeout(r, 100)); // Allow DOM to layout container
-
-    // ============================================================================
-    // FLAWLESS GRANULAR PAGINATION ALGORITHM:
-    // Iterate over every specific paragraph, list item, and heading.
-    // If it crosses the page boundary, push it perfectly to the next page WITH
-    // an extra 40px of padding to guarantee "distance in both pages" as requested.
-    // ============================================================================
-    const wrapper = container.children[0] as HTMLElement;
-    const breakableElements = Array.from(wrapper.querySelectorAll('p, li, h1, h2, h3, h4, table, img'));
-    
-    for (let i = 0; i < breakableElements.length; i++) {
-      const el = breakableElements[i] as HTMLElement;
-      
-      // Calculate absolute offset relative to the wrapper
-      let currentEl: HTMLElement | null = el;
-      let elTop = 0;
-      while (currentEl && currentEl !== wrapper) {
-         elTop += currentEl.offsetTop;
-         currentEl = currentEl.offsetParent as HTMLElement;
-      }
-      
-      const elHeight = el.offsetHeight;
-      const startPage = Math.floor(elTop / innerHeight);
-      const endPage = Math.floor((elTop + elHeight) / innerHeight);
-      
-      // If the specific text node crosses the boundary, and isn't larger than a whole page
-      if (startPage !== endPage && elHeight < innerHeight) {
-         // Push it exactly to the next page + an extra 40px padding distance!
-         const pushAmount = (endPage * innerHeight) - elTop + 40; 
-         
-         const spacer = document.createElement('div');
-         spacer.style.height = `${pushAmount}px`;
-         spacer.style.width = '100%';
-         spacer.style.display = 'block';
-         spacer.style.clear = 'both';
-         el.parentNode?.insertBefore(spacer, el);
-      }
-    }
-
-    // Wait briefly for the browser to paint the new spacers
-    await new Promise(r => setTimeout(r, 100));
-
-    const safeTopic = (currentTopic || 'Report').replace(/[^a-zA-Z0-9 -]/g, '').trim().substring(0, 30) || 'Report';
-
-    // Temporarily remove all external/Tailwind stylesheets so html2canvas doesn't crash
-    const existingStyles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'));
-    const styleBackups = existingStyles.map(el => {
-      if (el.parentNode === container) return null;
-      const parent = el.parentNode;
-      const sibling = el.nextSibling;
-      parent?.removeChild(el);
-      return { el, parent, sibling };
-    }).filter(Boolean) as { el: Element, parent: ParentNode | null, sibling: ChildNode | null }[];
-
-    try {
-      // Take a single, flawless snapshot of the perfectly paginated wrapper
-      const canvas = await html2canvas(wrapper, {
-        scale: 2, // 2x high resolution
-        useCORS: true,
-        scrollY: 0,
-        windowWidth: innerWidth,
-        logging: false
-      });
-
-      const imgData = canvas.toDataURL('image/jpeg', 1.0);
-      
-      // Because scale is 2, the image height in pt is exactly half the canvas height
-      const imgHeight = canvas.height / 2;
-      
-      let heightLeft = imgHeight;
-      let position = margin; // Start drawing at the top margin
-
-      // First page
-      pdf.addImage(imgData, 'JPEG', margin, position, innerWidth, imgHeight);
-      
-      // Mask the physical margins with pure white rectangles so the image cannot bleed or duplicate
-      pdf.setFillColor(255, 255, 255);
-      pdf.rect(0, 0, pdfWidth, margin, 'F'); // Top margin mask
-      pdf.rect(0, pdfHeight - margin, pdfWidth, margin, 'F'); // Bottom margin mask
-      
-      heightLeft -= innerHeight;
-
-      // Slice subsequent pages perfectly through the whitespace spacers!
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight + margin; 
-        pdf.addPage();
-        pdf.addImage(imgData, 'JPEG', margin, position, innerWidth, imgHeight);
-        
-        // Mask the physical margins on all subsequent pages
-        pdf.setFillColor(255, 255, 255);
-        pdf.rect(0, 0, pdfWidth, margin, 'F'); 
-        pdf.rect(0, pdfHeight - margin, pdfWidth, margin, 'F'); 
-        
-        heightLeft -= innerHeight;
-      }
-
-      pdf.save(`${safeTopic}.pdf`);
-    } finally {
-      // Restore all stylesheets immediately
-      styleBackups.forEach(({ el, parent, sibling }) => {
-        parent?.insertBefore(el, sibling);
-      });
-      document.body.removeChild(container);
-      document.body.removeChild(overlay);
-      
-      // Restore the user's original scroll position seamlessly
-      window.scrollTo(originalScrollX, originalScrollY);
-    }
+    // Use the native browser print engine for a real, selectable-text PDF
+    window.print();
   };
 
   const handleDownloadWord = async () => {
@@ -460,10 +220,12 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-white selection:bg-indigo-500/30 overflow-x-hidden">
-      <Navbar />
+      <div className="print:hidden">
+        <Navbar />
+      </div>
 
       {/* Background glow effects */}
-      <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] opacity-20 pointer-events-none z-0">
+      <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] opacity-20 pointer-events-none z-0 print:hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full blur-[100px]" />
       </div>
 
@@ -670,7 +432,7 @@ export default function Home() {
             animate={{ opacity: 1, y: 0 }}
             className="relative z-10 pt-32 pb-24 px-6 max-w-6xl mx-auto"
           >
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-10">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-10 print:hidden">
               <div>
                 <h2 className="text-3xl font-bold text-white mb-2">{generatedSlides ? "Presentation Preview" : "Report Preview"}</h2>
                 <p className="text-slate-400 max-w-2xl line-clamp-2">Instructions: <span className="text-indigo-400">{currentTopic}</span></p>

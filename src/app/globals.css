@@ -72,3 +72,36 @@ body {
 ::-webkit-scrollbar-corner {
   background: #020617;
 }
+
+/* Force all text to black and font to Bookman Old Style when printing to PDF */
+@media print {
+  @page {
+    size: A4;
+    margin: 1.5cm; /* Strict A4 margin to prevent excessive whitespace */
+  }
+
+  * {
+    color: black !important;
+    font-family: 'Bookman Old Style', Bookman, serif !important;
+  }
+
+  h1 {
+    font-size: 16pt !important;
+    margin-top: 0 !important;
+  }
+
+  /* Compress excessive spacing in the document to fit more text on the page */
+  .prose p, .prose ul, .prose ol {
+    margin-top: 0.5em !important;
+    margin-bottom: 0.5em !important;
+  }
+
+  .prose h2, .prose h3 {
+    margin-top: 1em !important;
+    margin-bottom: 0.5em !important;
+  }
+  
+  .prose {
+    max-width: 100% !important;
+  }
+}

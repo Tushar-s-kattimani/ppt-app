@@ -9,6 +9,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No HTML content provided' }, { status: 400 });
     }
 
+    // Clean up the HTML to prevent Word document corruption
+    // html-to-docx fails if it encounters complex Tailwind classes or inline styles
+    const cleanHtml = htmlContent
+      .replace(/class="[^"]*"/g, '')
+      .replace(/style="[^"]*"/g, '')
+      .replace(/id="[^"]*"/g, '')
+      .replace(/<svg[^>]*>[\s\S]*?<\/svg>/gi, '') // Remove SVGs
+      .replace(/<img[^>]*>/gi, ''); // Remove images which often require canvas/native builds to be fully supported
+
     // Wrap the HTML content in proper structure for the parser
     // html-to-docx parses semantic HTML perfectly. Do not use <style> tags as they can corrupt the internal document.xml
     const documentHTML = `
@@ -18,7 +27,7 @@ export async function POST(request: Request) {
           <meta charset="utf-8">
         </head>
         <body>
-          ${htmlContent}
+          ${cleanHtml}
         </body>
       </html>
     `;
@@ -37,27 +46,18 @@ export async function POST(request: Request) {
     const safeTopic = (topic || 'Report').replace(/[^a-zA-Z0-9 -]/g, '').trim().substring(0, 30) || 'Report';
     const filename = `${safeTopic}.docx`;
 
-    // Strictly convert Node Buffer to a raw ArrayBuffer to prevent Next.js from accidentally serializing it as a UTF-8 string
-    let arrayBuffer: ArrayBuffer;
-    let contentLength: string;
-    
-    if (fileBuffer instanceof Blob) {
-      arrayBuffer = await fileBuffer.arrayBuffer();
-      contentLength = fileBuffer.size.toString();
-    } else if (fileBuffer.buffer) {
-      arrayBuffer = fileBuffer.buffer.slice(fileBuffer.byteOffset, fileBuffer.byteOffset + fileBuffer.byteLength);
-      contentLength = fileBuffer.length.toString();
-    } else {
-      arrayBuffer = fileBuffer;
-      contentLength = fileBuffer.byteLength.toString();
-    }
+    const bufferData = Buffer.isBuffer(fileBuffer) 
+      ? fileBuffer 
+      : fileBuffer instanceof Blob 
+        ? Buffer.from(await fileBuffer.arrayBuffer()) 
+        : Buffer.from(fileBuffer as any);
 
     // Return the generated buffer as a downloadable DOCX file
-    return new NextResponse(arrayBuffer, {
+    return new NextResponse(bufferData, {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         'Content-Disposition': `attachment; filename="${filename}"`,
-        'Content-Length': contentLength,
+        'Content-Length': bufferData.length.toString(),
       },
     });
   } catch (error) {
